@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CSV Data Analyzer Dashboard v3 Fix</title>
+  <link rel="stylesheet" href="assets/css/style.css" />
+
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div class="header-row">
+      <div>
+        <h1>CSV Data Analyzer Dashboard</h1>
+        <p class="subtitle">Upload CSV, filter, sort, paginate, export, and visualize data</p>
+      </div>
+      <button id="themeToggleBtn" class="theme-btn" type="button">🌙 Dark Mode</button>
+    </div>
+
+    <div id="dropZone" class="drop-zone">
+      <p><strong>Drag & Drop CSV here</strong></p>
+      <p>or</p>
+      <label for="csvFile" class="upload-btn">Choose CSV File</label>
+      <input type="file" id="csvFile" accept=".csv" hidden />
+      <small>Only .csv file supported</small>
+    </div>
+
+    <div class="top-controls">
+      <input type="text" id="searchInput" placeholder="Search all data..." />
+
+      <select id="filterColumn">
+        <option value="">Filter column</option>
+      </select>
+
+      <input type="text" id="filterValue" placeholder="Filter value..." />
+
+      <button id="resetBtn" type="button">Reset</button>
+      <button id="exportBtn" type="button">Export Filtered CSV</button>
+    </div>
+
+    <div class="summary-grid">
+      <div class="card">
+        <span class="label">Total Rows</span>
+        <h2 id="totalRows">0</h2>
+      </div>
+
+      <div class="card">
+        <span class="label">Total Columns</span>
+        <h2 id="totalColumns">0</h2>
+      </div>
+
+      <div class="card">
+        <span class="label">Numeric Columns</span>
+        <h2 id="numericColumnsCount">0</h2>
+      </div>
+
+      <div class="card highlight">
+        <span class="label">Selected Numeric Column</span>
+        <h2 id="selectedNumericColumn">-</h2>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-box">
+        <span>Min</span>
+        <strong id="minValue">-</strong>
+      </div>
+      <div class="stat-box">
+        <span>Max</span>
+        <strong id="maxValue">-</strong>
+      </div>
+      <div class="stat-box">
+        <span>Average</span>
+        <strong id="avgValue">-</strong>
+      </div>
+    </div>
+
+    <div class="chart-controls">
+      <select id="chartColumnSelect">
+        <option value="">Select column for chart</option>
+      </select>
+
+      <select id="chartTypeSelect">
+        <option value="auto">Auto Detect</option>
+        <option value="bar">Bar Chart</option>
+        <option value="pie">Pie Chart</option>
+        <option value="line">Line Chart</option>
+      </select>
+    </div>
+
+    <div class="chart-section">
+      <div class="chart-wrapper">
+        <canvas id="myChart"></canvas>
+      </div>
+    </div>
+
+    <div class="table-section">
+      <table id="csvTable">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+      <div id="emptyMessage" class="empty-message">No data loaded.</div>
+    </div>
+
+    <div class="pagination-section">
+      <button id="prevPageBtn" type="button">Previous</button>
+      <span id="pageInfo">Page 0 of 0</span>
+      <button id="nextPageBtn" type="button">Next</button>
+    </div>
+  </div>
+
+  <script src="assets/js/script.js"></script>
+</body>
+</html>
