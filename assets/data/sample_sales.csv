@@ -1,0 +1,21 @@
+Date,Region,Category,Representative,UnitsSold,UnitPrice,Revenue,Cost,Profit,CustomerRating
+2024-01-05,North,Electronics,Alice,14,250,3500,2100,1400,4.8
+2024-01-08,South,Furniture,Bob,8,120,960,600,360,4.2
+2024-01-12,East,Electronics,Charlie,22,180,3960,2400,1560,4.9
+2024-01-15,West,Office Supplies,Diana,45,15,675,300,375,3.9
+2024-01-19,North,Furniture,Alice,12,310,3720,2200,1520,4.5
+2024-01-22,South,Office Supplies,Bob,60,18,1080,480,600,4.1
+2024-01-28,East,Furniture,Charlie,5,450,2250,1500,750,4.6
+2024-02-02,West,Electronics,Diana,18,220,3960,2500,1460,4.7
+2024-02-07,North,Office Supplies,Alice,35,22,770,350,420,4.0
+2024-02-14,South,Electronics,Bob,16,280,4480,2700,1780,4.9
+2024-02-18,East,Office Supplies,Charlie,50,12,600,280,320,3.8
+2024-02-23,West,Furniture,Diana,9,390,3510,2100,1410,4.3
+2024-03-01,North,Electronics,Alice,25,190,4750,2900,1850,5.0
+2024-03-05,South,Furniture,Bob,11,290,3190,1950,1240,4.4
+2024-03-10,East,Electronics,Charlie,19,210,3990,2450,1540,4.7
+2024-03-16,West,Office Supplies,Diana,75,10,750,320,430,4.2
+2024-03-22,North,Furniture,Alice,15,340,5100,3100,2000,4.6
+2024-03-27,South,Office Supplies,Bob,40,25,1000,450,550,3.7
+2024-04-02,East,Furniture,Charlie,7,420,2940,1800,1140,4.5
+2024-04-08,West,Electronics,Diana,30,175,5250,3100,2150,4.8

@@ -3,38 +3,85 @@ document.addEventListener("DOMContentLoaded", () => {
     originalData: [],
     filteredData: [],
     numericColumns: [],
+    allColumns: [],
     chartInstance: null,
     currentPage: 1,
     rowsPerPage: 5,
     currentSortColumn: "",
-    currentSortDirection: "asc"
+    currentSortDirection: "asc",
+    aggregationResults: null
   };
 
   const elements = {
+    // Inputs & Filters
     csvFileInput: document.getElementById("csvFile"),
     dropZone: document.getElementById("dropZone"),
+    loadSampleBtn: document.getElementById("loadSampleBtn"),
     searchInput: document.getElementById("searchInput"),
     filterColumn: document.getElementById("filterColumn"),
     filterValue: document.getElementById("filterValue"),
     resetBtn: document.getElementById("resetBtn"),
     exportBtn: document.getElementById("exportBtn"),
     themeToggleBtn: document.getElementById("themeToggleBtn"),
-    chartColumnSelect: document.getElementById("chartColumnSelect"),
-    chartTypeSelect: document.getElementById("chartTypeSelect"),
+
+    // Overview Cards
     totalRows: document.getElementById("totalRows"),
     totalColumns: document.getElementById("totalColumns"),
     numericColumnsCount: document.getElementById("numericColumnsCount"),
     selectedNumericColumn: document.getElementById("selectedNumericColumn"),
+
+    // Expanded Stats Grid
     minValue: document.getElementById("minValue"),
     maxValue: document.getElementById("maxValue"),
     avgValue: document.getElementById("avgValue"),
+    sumValue: document.getElementById("sumValue"),
+    medianValue: document.getElementById("medianValue"),
+    modeValue: document.getElementById("modeValue"),
+    stdDevValue: document.getElementById("stdDevValue"),
+    distinctValue: document.getElementById("distinctValue"),
+    missingValue: document.getElementById("missingValue"),
+
+    // Group By & Aggregation
+    groupByColSelect: document.getElementById("groupByColSelect"),
+    aggColSelect: document.getElementById("aggColSelect"),
+    aggFuncSelect: document.getElementById("aggFuncSelect"),
+    plotAggBtn: document.getElementById("plotAggBtn"),
+    exportAggBtn: document.getElementById("exportAggBtn"),
+    aggColHeader: document.getElementById("aggColHeader"),
+    aggTableBody: document.getElementById("aggTableBody"),
+
+    // Chart & Scatter
+    standardChartControls: document.getElementById("standardChartControls"),
+    chartColumnSelect: document.getElementById("chartColumnSelect"),
+    chartTypeSelect: document.getElementById("chartTypeSelect"),
+    scatterControls: document.getElementById("scatterControls"),
+    scatterXSelect: document.getElementById("scatterXSelect"),
+    scatterYSelect: document.getElementById("scatterYSelect"),
+    correlationBox: document.getElementById("correlationBox"),
+    corrValue: document.getElementById("corrValue"),
+    corrBadge: document.getElementById("corrBadge"),
+    regressionEquation: document.getElementById("regressionEquation"),
+    chartCanvas: document.getElementById("myChart"),
+
+    // Data Table & Pagination
     tableHead: document.querySelector("#csvTable thead"),
     tableBody: document.querySelector("#csvTable tbody"),
     prevPageBtn: document.getElementById("prevPageBtn"),
     nextPageBtn: document.getElementById("nextPageBtn"),
     pageInfo: document.getElementById("pageInfo"),
     emptyMessage: document.getElementById("emptyMessage"),
-    chartCanvas: document.getElementById("myChart")
+
+    // Profiler Modal
+    profilerBtn: document.getElementById("profilerBtn"),
+    profilerModal: document.getElementById("profilerModal"),
+    closeProfilerModal: document.getElementById("closeProfilerModal"),
+    closeProfilerBtn: document.getElementById("closeProfilerBtn"),
+    overallCompleteness: document.getElementById("overallCompleteness"),
+    profilerTotalCols: document.getElementById("profilerTotalCols"),
+    profilerTotalRows: document.getElementById("profilerTotalRows"),
+    profilerTotalCells: document.getElementById("profilerTotalCells"),
+    profilerMissingCells: document.getElementById("profilerMissingCells"),
+    profilerTableBody: document.getElementById("profilerTableBody")
   };
 
   initializeTheme();
@@ -49,16 +96,45 @@ document.addEventListener("DOMContentLoaded", () => {
       if (file) handleFile(file);
     });
 
+    if (elements.loadSampleBtn) {
+      elements.loadSampleBtn.addEventListener("click", loadSampleDataset);
+    }
+
     elements.searchInput.addEventListener("input", applyFilters);
     elements.filterColumn.addEventListener("change", applyFilters);
     elements.filterValue.addEventListener("input", applyFilters);
     elements.resetBtn.addEventListener("click", resetFilters);
     elements.exportBtn.addEventListener("click", exportFilteredCSV);
+
+    // Chart controls
     elements.chartColumnSelect.addEventListener("change", updateChartAndStats);
-    elements.chartTypeSelect.addEventListener("change", updateChartAndStats);
+    elements.chartTypeSelect.addEventListener("change", handleChartTypeChange);
+    elements.scatterXSelect.addEventListener("change", updateScatterPlot);
+    elements.scatterYSelect.addEventListener("change", updateScatterPlot);
+
+    // Group By Aggregation controls
+    elements.groupByColSelect.addEventListener("change", runAggregation);
+    elements.aggColSelect.addEventListener("change", runAggregation);
+    elements.aggFuncSelect.addEventListener("change", runAggregation);
+    elements.plotAggBtn.addEventListener("click", plotAggregationToChart);
+    elements.exportAggBtn.addEventListener("click", exportAggregationCSV);
+
+    // Pagination
     elements.prevPageBtn.addEventListener("click", goToPreviousPage);
     elements.nextPageBtn.addEventListener("click", goToNextPage);
     elements.themeToggleBtn.addEventListener("click", toggleTheme);
+
+    // Column Profiler Modal
+    if (elements.profilerBtn && elements.profilerModal) {
+      elements.profilerBtn.addEventListener("click", openProfilerModal);
+      elements.closeProfilerModal.addEventListener("click", () => elements.profilerModal.close());
+      elements.closeProfilerBtn.addEventListener("click", () => elements.profilerModal.close());
+      elements.profilerModal.addEventListener("click", (e) => {
+        if (e.target === elements.profilerModal) {
+          elements.profilerModal.close();
+        }
+      });
+    }
 
     setupDragAndDrop();
   }
@@ -96,26 +172,7 @@ document.addEventListener("DOMContentLoaded", () => {
       header: true,
       skipEmptyLines: true,
       complete: function(results) {
-        if (!results.data || !results.data.length) {
-          alert("CSV file is empty or invalid.");
-          return;
-        }
-
-        state.originalData = results.data.filter((row) =>
-          Object.values(row).some((value) => String(value).trim() !== "")
-        );
-
-        state.filteredData = [...state.originalData];
-        state.numericColumns = detectNumericColumns(state.originalData);
-        state.currentPage = 1;
-        state.currentSortColumn = "";
-        state.currentSortDirection = "asc";
-
-        populateFilterColumns();
-        populateChartColumns();
-        updateSummary();
-        renderTable();
-        updateChartAndStats();
+        processParsedData(results.data);
       },
       error: function() {
         alert("Failed to parse CSV file.");
@@ -123,9 +180,58 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  function loadSampleDataset() {
+    fetch("assets/data/sample_sales.csv")
+      .then((res) => {
+        if (!res.ok) throw new Error("Could not load sample data");
+        return res.text();
+      })
+      .then((csvText) => {
+        Papa.parse(csvText, {
+          header: true,
+          skipEmptyLines: true,
+          complete: function(results) {
+            processParsedData(results.data);
+          }
+        });
+      })
+      .catch((err) => {
+        console.error("Failed to load sample dataset:", err);
+        alert("Could not load sample dataset.");
+      });
+  }
+
+  function processParsedData(data) {
+    if (!data || !data.length) {
+      alert("CSV data is empty or invalid.");
+      return;
+    }
+
+    state.originalData = data.filter((row) =>
+      Object.values(row).some((value) => String(value).trim() !== "")
+    );
+
+    if (!state.originalData.length) {
+      alert("No valid rows found in CSV.");
+      return;
+    }
+
+    state.allColumns = Object.keys(state.originalData[0]);
+    state.filteredData = [...state.originalData];
+    state.numericColumns = detectNumericColumns(state.originalData);
+    state.currentPage = 1;
+    state.currentSortColumn = "";
+    state.currentSortDirection = "asc";
+
+    populateDropdowns();
+    updateSummary();
+    renderTable();
+    updateChartAndStats();
+    runAggregation();
+  }
+
   function detectNumericColumns(data) {
     if (!data.length) return [];
-
     const headers = Object.keys(data[0]);
 
     return headers.filter((header) => {
@@ -134,40 +240,73 @@ document.addEventListener("DOMContentLoaded", () => {
         .filter((value) => value !== "");
 
       if (!values.length) return false;
-
       return values.every((value) => !Number.isNaN(Number(value)));
     });
   }
 
-  function populateFilterColumns() {
+  function populateDropdowns() {
+    // 1. Filter Column dropdown
     elements.filterColumn.innerHTML = `<option value="">Filter column</option>`;
-
-    if (!state.originalData.length) return;
-
-    const headers = Object.keys(state.originalData[0]);
-
-    headers.forEach((header) => {
-      const option = document.createElement("option");
-      option.value = header;
-      option.textContent = header;
-      elements.filterColumn.appendChild(option);
+    state.allColumns.forEach((header) => {
+      const opt = document.createElement("option");
+      opt.value = header;
+      opt.textContent = header;
+      elements.filterColumn.appendChild(opt);
     });
-  }
 
-  function populateChartColumns() {
+    // 2. Chart Column dropdown
     elements.chartColumnSelect.innerHTML = `<option value="">Select column for chart</option>`;
-
-    if (!state.originalData.length) return;
-
-    const headers = Object.keys(state.originalData[0]);
-
-    headers.forEach((header) => {
-      const option = document.createElement("option");
-      option.value = header;
-      option.textContent = state.numericColumns.includes(header)
+    state.allColumns.forEach((header) => {
+      const opt = document.createElement("option");
+      opt.value = header;
+      opt.textContent = state.numericColumns.includes(header)
         ? `${header} (Numeric)`
         : header;
-      elements.chartColumnSelect.appendChild(option);
+      if (state.numericColumns.length > 0 && header === state.numericColumns[0]) {
+        opt.selected = true;
+      }
+      elements.chartColumnSelect.appendChild(opt);
+    });
+
+    // 3. Scatter Selectors
+    elements.scatterXSelect.innerHTML = `<option value="">Select X Column</option>`;
+    elements.scatterYSelect.innerHTML = `<option value="">Select Y Column</option>`;
+    state.numericColumns.forEach((col, idx) => {
+      const optX = document.createElement("option");
+      optX.value = col;
+      optX.textContent = col;
+      if (idx === 0) optX.selected = true;
+      elements.scatterXSelect.appendChild(optX);
+
+      const optY = document.createElement("option");
+      optY.value = col;
+      optY.textContent = col;
+      if (idx === 1 || (state.numericColumns.length === 1 && idx === 0)) optY.selected = true;
+      elements.scatterYSelect.appendChild(optY);
+    });
+
+    // 4. Group By Aggregation Selectors
+    elements.groupByColSelect.innerHTML = `<option value="">Select Category Column</option>`;
+    let defaultGroupSelected = false;
+    state.allColumns.forEach((col) => {
+      const opt = document.createElement("option");
+      opt.value = col;
+      opt.textContent = col;
+      // Default to first non-numeric column if available
+      if (!state.numericColumns.includes(col) && !defaultGroupSelected) {
+        opt.selected = true;
+        defaultGroupSelected = true;
+      }
+      elements.groupByColSelect.appendChild(opt);
+    });
+
+    elements.aggColSelect.innerHTML = `<option value="">Select Numeric Column</option>`;
+    state.numericColumns.forEach((col, idx) => {
+      const opt = document.createElement("option");
+      opt.value = col;
+      opt.textContent = col;
+      if (idx === 0) opt.selected = true;
+      elements.aggColSelect.appendChild(opt);
     });
   }
 
@@ -196,6 +335,7 @@ document.addEventListener("DOMContentLoaded", () => {
     updateSummary();
     renderTable();
     updateChartAndStats();
+    runAggregation();
   }
 
   function resetFilters() {
@@ -210,9 +350,11 @@ document.addEventListener("DOMContentLoaded", () => {
     state.currentSortDirection = "asc";
     state.currentPage = 1;
 
+    handleChartTypeChange();
     updateSummary();
     renderTable();
     updateChartAndStats();
+    runAggregation();
   }
 
   function updateSummary() {
@@ -235,7 +377,6 @@ document.addEventListener("DOMContentLoaded", () => {
     elements.emptyMessage.style.display = "none";
 
     const headers = Object.keys(state.filteredData[0]);
-
     const headerRow = document.createElement("tr");
 
     headers.forEach((header) => {
@@ -330,14 +471,119 @@ document.addEventListener("DOMContentLoaded", () => {
       : 0;
 
     elements.pageInfo.textContent = `Page ${totalPages ? state.currentPage : 0} of ${totalPages}`;
-
     elements.prevPageBtn.disabled = state.currentPage <= 1;
     elements.nextPageBtn.disabled = totalPages === 0 || state.currentPage >= totalPages;
   }
 
-  function updateChartAndStats() {
-    resetStats();
+  /* ========================================================
+     FEATURE: EXPANDED STATISTICAL METRICS
+     ======================================================== */
+  function updateNumericStats(column) {
+    const allColValues = state.filteredData.map((row) => row[column]);
+    const missingCount = allColValues.filter(
+      (val) => val === undefined || val === null || String(val).trim() === ""
+    ).length;
 
+    const values = allColValues
+      .map((val) => Number(val))
+      .filter((num) => !Number.isNaN(num) && String(num).trim() !== "");
+
+    if (!values.length) {
+      resetStats();
+      elements.missingValue.textContent = missingCount;
+      return;
+    }
+
+    // Min, Max, Sum, Avg
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const sum = values.reduce((acc, val) => acc + val, 0);
+    const avg = sum / values.length;
+
+    // Median
+    const sorted = [...values].sort((a, b) => a - b);
+    let median;
+    const mid = Math.floor(sorted.length / 2);
+    if (sorted.length % 2 === 0) {
+      median = (sorted[mid - 1] + sorted[mid]) / 2;
+    } else {
+      median = sorted[mid];
+    }
+
+    // Mode
+    const freqMap = {};
+    let maxFreq = 0;
+    values.forEach((v) => {
+      freqMap[v] = (freqMap[v] || 0) + 1;
+      if (freqMap[v] > maxFreq) maxFreq = freqMap[v];
+    });
+
+    let modeText = "-";
+    if (maxFreq > 1) {
+      const modes = Object.keys(freqMap).filter((k) => freqMap[k] === maxFreq);
+      modeText = modes.slice(0, 3).map((v) => formatNumber(v)).join(", ");
+      if (modes.length > 3) modeText += "...";
+    } else {
+      modeText = "None (All Unique)";
+    }
+
+    // Standard Deviation (Sample)
+    let stdDev = 0;
+    if (values.length > 1) {
+      const variance = values.reduce((acc, v) => acc + Math.pow(v - avg, 2), 0) / (values.length - 1);
+      stdDev = Math.sqrt(variance);
+    }
+
+    // Distinct count
+    const distinctCount = new Set(values).size;
+
+    elements.minValue.textContent = formatNumber(min);
+    elements.maxValue.textContent = formatNumber(max);
+    elements.avgValue.textContent = formatNumber(avg);
+    elements.sumValue.textContent = formatNumber(sum);
+    elements.medianValue.textContent = formatNumber(median);
+    elements.modeValue.textContent = modeText;
+    elements.stdDevValue.textContent = formatNumber(stdDev);
+    elements.distinctValue.textContent = distinctCount.toLocaleString();
+    elements.missingValue.textContent = missingCount.toLocaleString();
+  }
+
+  function resetStats() {
+    elements.minValue.textContent = "-";
+    elements.maxValue.textContent = "-";
+    elements.avgValue.textContent = "-";
+    elements.sumValue.textContent = "-";
+    elements.medianValue.textContent = "-";
+    elements.modeValue.textContent = "-";
+    elements.stdDevValue.textContent = "-";
+    elements.distinctValue.textContent = "-";
+    elements.missingValue.textContent = "-";
+    elements.selectedNumericColumn.textContent = "-";
+  }
+
+  /* ========================================================
+     FEATURE: CHARTING & SCATTER PLOT (X vs Y) WITH CORRELATION
+     ======================================================== */
+  function handleChartTypeChange() {
+    const selectedType = elements.chartTypeSelect.value;
+    if (selectedType === "scatter") {
+      elements.standardChartControls.style.display = "none";
+      elements.scatterControls.style.display = "block";
+      updateScatterPlot();
+    } else {
+      elements.standardChartControls.style.display = "block";
+      elements.scatterControls.style.display = "none";
+      updateChartAndStats();
+    }
+  }
+
+  function updateChartAndStats() {
+    if (elements.chartTypeSelect.value === "scatter") {
+      updateScatterPlot();
+      return;
+    }
+
+    resetStats();
     const selectedColumn = elements.chartColumnSelect.value;
     const selectedChartType = elements.chartTypeSelect.value;
 
@@ -357,7 +603,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function detectChartType(column, selectedChartType) {
     if (selectedChartType !== "auto") {
-      if (state.numericColumns.includes(column) && selectedChartType === "pie") {
+      if (state.numericColumns.includes(column) && (selectedChartType === "pie" || selectedChartType === "doughnut")) {
         return "bar";
       }
       return selectedChartType;
@@ -377,40 +623,23 @@ document.addEventListener("DOMContentLoaded", () => {
     return uniqueValues.size <= 6 ? "pie" : "bar";
   }
 
-  function updateNumericStats(column) {
-    const values = state.filteredData
-      .map((row) => Number(row[column]))
-      .filter((value) => !Number.isNaN(value));
-
-    if (!values.length) return;
-
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const avg = values.reduce((sum, value) => sum + value, 0) / values.length;
-
-    elements.minValue.textContent = formatNumber(min);
-    elements.maxValue.textContent = formatNumber(max);
-    elements.avgValue.textContent = formatNumber(avg);
-  }
-
   function renderNumericChart(column, chartType) {
     const values = state.filteredData
       .map((row) => Number(row[column]))
       .filter((value) => !Number.isNaN(value));
 
     const labels = values.map((_, index) => `Row ${index + 1}`);
-    renderChart(labels, values, `${column} Distribution`, chartType);
+    renderStandardChart(labels, values, `${column} Distribution`, chartType);
   }
 
   function renderCategoryChart(column, chartType) {
     const counts = {};
-
     state.filteredData.forEach((row) => {
       const value = row[column] && String(row[column]).trim() !== "" ? row[column] : "Empty";
       counts[value] = (counts[value] || 0) + 1;
     });
 
-    renderChart(
+    renderStandardChart(
       Object.keys(counts),
       Object.values(counts),
       `Count by ${column}`,
@@ -418,10 +647,186 @@ document.addEventListener("DOMContentLoaded", () => {
     );
   }
 
-  function renderChart(labels, data, label, type) {
-    destroyChart();
+  function updateScatterPlot() {
+    const colX = elements.scatterXSelect.value;
+    const colY = elements.scatterYSelect.value;
 
+    if (!colX || !colY || !state.filteredData.length) {
+      destroyChart();
+      elements.correlationBox.style.display = "none";
+      return;
+    }
+
+    // Extract valid paired data
+    const paired = [];
+    state.filteredData.forEach((row) => {
+      const vx = Number(row[colX]);
+      const vy = Number(row[colY]);
+      if (!Number.isNaN(vx) && !Number.isNaN(vy)) {
+        paired.push({ x: vx, y: vy });
+      }
+    });
+
+    if (paired.length < 2) {
+      destroyChart();
+      elements.correlationBox.style.display = "none";
+      return;
+    }
+
+    // Calculate Pearson Correlation (r) & Linear Regression (y = mx + b)
+    const n = paired.length;
+    const sumX = paired.reduce((acc, p) => acc + p.x, 0);
+    const sumY = paired.reduce((acc, p) => acc + p.y, 0);
+    const meanX = sumX / n;
+    const meanY = sumY / n;
+
+    let numerator = 0;
+    let denomX = 0;
+    let denomY = 0;
+
+    paired.forEach((p) => {
+      const dx = p.x - meanX;
+      const dy = p.y - meanY;
+      numerator += dx * dy;
+      denomX += dx * dx;
+      denomY += dy * dy;
+    });
+
+    const denom = Math.sqrt(denomX * denomY);
+    const r = denom === 0 ? 0 : numerator / denom;
+
+    // Regression slope & intercept
+    const slope = denomX === 0 ? 0 : numerator / denomX;
+    const intercept = meanY - slope * meanX;
+
+    // Display correlation results
+    elements.correlationBox.style.display = "flex";
+    elements.corrValue.textContent = r.toFixed(3);
+
+    // Badge styling & text
+    const absR = Math.abs(r);
+    let badgeText = "";
+    let badgeClass = "corr-badge ";
+
+    if (absR >= 0.7) {
+      badgeText = r > 0 ? "Strong Positive Correlation" : "Strong Negative Correlation";
+      badgeClass += r > 0 ? "strong-pos" : "strong-neg";
+    } else if (absR >= 0.3) {
+      badgeText = r > 0 ? "Moderate Positive Correlation" : "Moderate Negative Correlation";
+      badgeClass += r > 0 ? "mod-pos" : "mod-neg";
+    } else {
+      badgeText = "Weak / No Linear Correlation";
+      badgeClass += "weak";
+    }
+
+    elements.corrBadge.textContent = badgeText;
+    elements.corrBadge.className = badgeClass;
+
+    const sign = intercept >= 0 ? "+" : "-";
+    elements.regressionEquation.textContent = `y = ${slope.toFixed(2)}x ${sign} ${Math.abs(intercept).toFixed(2)}`;
+
+    // Build trendline endpoints
+    const minX = Math.min(...paired.map((p) => p.x));
+    const maxX = Math.max(...paired.map((p) => p.x));
+    const trendlineData = [
+      { x: minX, y: slope * minX + intercept },
+      { x: maxX, y: slope * maxX + intercept }
+    ];
+
+    renderScatterChart(paired, trendlineData, colX, colY, r);
+  }
+
+  function renderScatterChart(scatterPoints, trendlinePoints, xLabel, yLabel, rValue) {
+    destroyChart();
     const ctx = elements.chartCanvas.getContext("2d");
+    const isDark = document.body.classList.contains("dark");
+    const textColor = isDark ? "#cbd5e1" : "#475569";
+    const gridColor = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)";
+
+    state.chartInstance = new Chart(ctx, {
+      type: "scatter",
+      data: {
+        datasets: [
+          {
+            label: `${yLabel} vs ${xLabel}`,
+            data: scatterPoints,
+            backgroundColor: "rgba(37, 99, 235, 0.7)",
+            borderColor: "rgba(37, 99, 235, 1)",
+            borderWidth: 1,
+            pointRadius: 6,
+            pointHoverRadius: 8
+          },
+          {
+            type: "line",
+            label: `Trendline (r = ${rValue.toFixed(2)})`,
+            data: trendlinePoints,
+            borderColor: "#ef4444",
+            borderWidth: 2,
+            borderDash: [6, 6],
+            fill: false,
+            pointRadius: 0
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: true,
+            labels: { color: textColor }
+          },
+          title: {
+            display: true,
+            text: `Scatter & Correlation: ${xLabel} vs ${yLabel}`,
+            color: textColor,
+            font: { size: 15, weight: "bold" }
+          },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `(${xLabel}: ${formatNumber(ctx.raw.x)}, ${yLabel}: ${formatNumber(ctx.raw.y)})`
+            }
+          }
+        },
+        scales: {
+          x: {
+            title: {
+              display: true,
+              text: xLabel,
+              color: textColor,
+              font: { weight: "600" }
+            },
+            ticks: { color: textColor },
+            grid: { color: gridColor }
+          },
+          y: {
+            title: {
+              display: true,
+              text: yLabel,
+              color: textColor,
+              font: { weight: "600" }
+            },
+            ticks: { color: textColor },
+            grid: { color: gridColor }
+          }
+        }
+      }
+    });
+  }
+
+  function renderStandardChart(labels, data, label, type) {
+    destroyChart();
+    const ctx = elements.chartCanvas.getContext("2d");
+    const isDark = document.body.classList.contains("dark");
+    const textColor = isDark ? "#cbd5e1" : "#475569";
+    const gridColor = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)";
+
+    const palette = [
+      "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6",
+      "#ec4899", "#06b6d4", "#f97316", "#14b8a6"
+    ];
+
+    const isPieLike = type === "pie" || type === "doughnut";
 
     state.chartInstance = new Chart(ctx, {
       type: type,
@@ -431,8 +836,14 @@ document.addEventListener("DOMContentLoaded", () => {
           {
             label: label,
             data: data,
+            backgroundColor: isPieLike
+              ? labels.map((_, i) => palette[i % palette.length])
+              : "rgba(59, 130, 246, 0.7)",
+            borderColor: isPieLike
+              ? "#ffffff"
+              : "#3b82f6",
             borderWidth: 2,
-            fill: false,
+            fill: type === "line" ? false : true,
             tension: 0.3
           }
         ]
@@ -442,18 +853,27 @@ document.addEventListener("DOMContentLoaded", () => {
         maintainAspectRatio: false,
         plugins: {
           legend: {
-            display: true
+            display: isPieLike,
+            labels: { color: textColor }
           },
           title: {
             display: true,
-            text: label
+            text: label,
+            color: textColor,
+            font: { size: 15, weight: "bold" }
           }
         },
-        scales: type === "pie"
+        scales: isPieLike
           ? {}
           : {
+              x: {
+                ticks: { color: textColor },
+                grid: { color: gridColor }
+              },
               y: {
-                beginAtZero: true
+                beginAtZero: true,
+                ticks: { color: textColor },
+                grid: { color: gridColor }
               }
             }
       }
@@ -467,13 +887,255 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function resetStats() {
-    elements.minValue.textContent = "-";
-    elements.maxValue.textContent = "-";
-    elements.avgValue.textContent = "-";
-    elements.selectedNumericColumn.textContent = "-";
+  /* ========================================================
+     FEATURE: GROUP BY & PIVOT AGGREGATION
+     ======================================================== */
+  function runAggregation() {
+    const groupByCol = elements.groupByColSelect.value;
+    const aggCol = elements.aggColSelect.value;
+    const aggFunc = elements.aggFuncSelect.value;
+
+    if (!groupByCol || !aggCol || !state.filteredData.length) {
+      elements.aggTableBody.innerHTML = `
+        <tr><td colspan="4" class="table-placeholder">Select a group column and numeric column above to aggregate.</td></tr>
+      `;
+      elements.plotAggBtn.disabled = true;
+      elements.exportAggBtn.disabled = true;
+      state.aggregationResults = null;
+      return;
+    }
+
+    const funcLabels = {
+      sum: "Sum",
+      avg: "Average",
+      count: "Row Count",
+      min: "Minimum",
+      max: "Maximum",
+      median: "Median"
+    };
+
+    elements.aggColHeader.textContent = `${funcLabels[aggFunc]} of ${aggCol}`;
+
+    // Grouping
+    const groups = {};
+    state.filteredData.forEach((row) => {
+      const rawCat = row[groupByCol];
+      const cat = rawCat !== undefined && String(rawCat).trim() !== "" ? String(rawCat) : "(Empty)";
+      if (!groups[cat]) {
+        groups[cat] = [];
+      }
+      const num = Number(row[aggCol]);
+      if (!Number.isNaN(num) && String(row[aggCol]).trim() !== "") {
+        groups[cat].push(num);
+      }
+    });
+
+    // Compute aggregated value per group
+    const results = [];
+    Object.keys(groups).forEach((cat) => {
+      const arr = groups[cat];
+      let val = 0;
+      if (arr.length > 0) {
+        if (aggFunc === "sum") {
+          val = arr.reduce((a, b) => a + b, 0);
+        } else if (aggFunc === "avg") {
+          val = arr.reduce((a, b) => a + b, 0) / arr.length;
+        } else if (aggFunc === "count") {
+          val = arr.length;
+        } else if (aggFunc === "min") {
+          val = Math.min(...arr);
+        } else if (aggFunc === "max") {
+          val = Math.max(...arr);
+        } else if (aggFunc === "median") {
+          const sorted = [...arr].sort((a, b) => a - b);
+          const mid = Math.floor(sorted.length / 2);
+          val = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+        }
+      }
+      results.push({
+        group: cat,
+        count: arr.length,
+        value: val
+      });
+    });
+
+    // Sort descending by value
+    results.sort((a, b) => b.value - a.value);
+    state.aggregationResults = {
+      groupByCol,
+      aggCol,
+      aggFunc,
+      data: results
+    };
+
+    const totalValue = results.reduce((acc, r) => acc + Math.abs(r.value), 0);
+
+    // Render table
+    elements.aggTableBody.innerHTML = "";
+    results.forEach((row) => {
+      const share = totalValue > 0 ? (Math.abs(row.value) / totalValue) * 100 : 0;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><strong>${escapeHtml(row.group)}</strong></td>
+        <td>${row.count.toLocaleString()}</td>
+        <td><strong>${formatNumber(row.value)}</strong></td>
+        <td>
+          <div class="share-cell">
+            <span>${share.toFixed(1)}%</span>
+            <div class="share-bar-bg">
+              <div class="share-bar-fill" style="width: ${Math.min(100, Math.max(2, share))}%;"></div>
+            </div>
+          </div>
+        </td>
+      `;
+      elements.aggTableBody.appendChild(tr);
+    });
+
+    elements.plotAggBtn.disabled = false;
+    elements.exportAggBtn.disabled = false;
   }
 
+  function plotAggregationToChart() {
+    if (!state.aggregationResults || !state.aggregationResults.data.length) return;
+
+    elements.chartTypeSelect.value = "bar";
+    handleChartTypeChange();
+
+    const agg = state.aggregationResults;
+    const labels = agg.data.map((r) => r.group);
+    const data = agg.data.map((r) => r.value);
+    const label = `${agg.aggFunc.toUpperCase()} of ${agg.aggCol} by ${agg.groupByCol}`;
+
+    renderStandardChart(labels, data, label, "bar");
+
+    // Scroll to chart smoothly
+    document.querySelector(".chart-section").scrollIntoView({ behavior: "smooth" });
+  }
+
+  function exportAggregationCSV() {
+    if (!state.aggregationResults || !state.aggregationResults.data.length) return;
+
+    const exportRows = state.aggregationResults.data.map((r) => ({
+      [state.aggregationResults.groupByCol]: r.group,
+      "Record Count": r.count,
+      [`${state.aggregationResults.aggFunc.toUpperCase()}_of_${state.aggregationResults.aggCol}`]: r.value
+    }));
+
+    const csv = Papa.unparse(exportRows);
+    downloadFile(csv, `aggregation_${state.aggregationResults.groupByCol}.csv`, "text/csv;charset=utf-8;");
+  }
+
+  /* ========================================================
+     FEATURE: DATA QUALITY & COLUMN PROFILER MODAL
+     ======================================================== */
+  function openProfilerModal() {
+    if (!state.originalData.length) {
+      alert("Please upload or load a CSV dataset first.");
+      return;
+    }
+
+    const totalRows = state.originalData.length;
+    const totalCols = state.allColumns.length;
+    const totalCells = totalRows * totalCols;
+    let missingCells = 0;
+
+    elements.profilerTableBody.innerHTML = "";
+
+    state.allColumns.forEach((col) => {
+      const colValues = state.originalData.map((row) => row[col]);
+      const missingCount = colValues.filter(
+        (v) => v === undefined || v === null || String(v).trim() === ""
+      ).length;
+      missingCells += missingCount;
+
+      const filledCount = totalRows - missingCount;
+      const completenessPct = (filledCount / totalRows) * 100;
+      const distinctCount = new Set(colValues.filter((v) => v !== undefined && String(v).trim() !== "")).size;
+
+      // Inferred Type & Range/Summary
+      const inferredType = inferColumnType(colValues);
+      let summaryText = "-";
+
+      if (inferredType === "numeric") {
+        const nums = colValues
+          .map((v) => Number(v))
+          .filter((v) => !Number.isNaN(v) && String(v).trim() !== "");
+        if (nums.length) {
+          const min = Math.min(...nums);
+          const max = Math.max(...nums);
+          const avg = nums.reduce((a, b) => a + b, 0) / nums.length;
+          summaryText = `Min: ${formatNumber(min)} | Max: ${formatNumber(max)} | Avg: ${formatNumber(avg)}`;
+        }
+      } else {
+        // Find most frequent value
+        const counts = {};
+        let topVal = "";
+        let topFreq = 0;
+        colValues.forEach((v) => {
+          if (v !== undefined && String(v).trim() !== "") {
+            counts[v] = (counts[v] || 0) + 1;
+            if (counts[v] > topFreq) {
+              topFreq = counts[v];
+              topVal = v;
+            }
+          }
+        });
+        summaryText = topFreq > 0 ? `Top: "${topVal}" (${topFreq} rows)` : "All Empty";
+      }
+
+      const typeBadgeClass = `badge-type ${inferredType}`;
+      const typeLabel = inferredType.charAt(0).toUpperCase() + inferredType.slice(1);
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><strong>${escapeHtml(col)}</strong></td>
+        <td><span class="${typeBadgeClass}">${typeLabel}</span></td>
+        <td>
+          <div class="share-cell">
+            <span>${completenessPct.toFixed(1)}%</span>
+            <div class="share-bar-bg">
+              <div class="share-bar-fill" style="width: ${completenessPct}%; background: ${completenessPct > 90 ? 'var(--success)' : completenessPct > 70 ? 'var(--warning)' : 'var(--danger)'};"></div>
+            </div>
+          </div>
+        </td>
+        <td>${missingCount.toLocaleString()}</td>
+        <td>${distinctCount.toLocaleString()}</td>
+        <td><small>${escapeHtml(summaryText)}</small></td>
+      `;
+      elements.profilerTableBody.appendChild(tr);
+    });
+
+    const overallPct = totalCells > 0 ? (((totalCells - missingCells) / totalCells) * 100).toFixed(1) : 0;
+    elements.overallCompleteness.textContent = `${overallPct}%`;
+    elements.profilerTotalCols.textContent = totalCols;
+    elements.profilerTotalRows.textContent = totalRows.toLocaleString();
+    elements.profilerTotalCells.textContent = totalCells.toLocaleString();
+    elements.profilerMissingCells.textContent = missingCells.toLocaleString();
+
+    elements.profilerModal.showModal();
+  }
+
+  function inferColumnType(values) {
+    const nonEmpties = values.filter((v) => v !== undefined && v !== null && String(v).trim() !== "");
+    if (!nonEmpties.length) return "text";
+
+    const numericCount = nonEmpties.filter((v) => !Number.isNaN(Number(v))).length;
+    if (numericCount / nonEmpties.length >= 0.9) {
+      return "numeric";
+    }
+
+    // Check date pattern (YYYY-MM-DD or MM/DD/YYYY)
+    const dateCount = nonEmpties.filter((v) => !Number.isNaN(Date.parse(v)) && String(v).length >= 6).length;
+    if (dateCount / nonEmpties.length >= 0.8) {
+      return "date";
+    }
+
+    return "text";
+  }
+
+  /* ========================================================
+     EXPORT & HELPERS
+     ======================================================== */
   function exportFilteredCSV() {
     if (!state.filteredData.length) {
       alert("No filtered data to export.");
@@ -481,12 +1143,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const csv = Papa.unparse(state.filteredData);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    downloadFile(csv, "filtered_data.csv", "text/csv;charset=utf-8;");
+  }
+
+  function downloadFile(content, fileName, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = "filtered_data.csv";
+    link.download = fileName;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -498,6 +1164,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const isDark = document.body.classList.contains("dark");
     localStorage.setItem("csvTheme", isDark ? "dark" : "light");
     elements.themeToggleBtn.textContent = isDark ? "☀️ Light Mode" : "🌙 Dark Mode";
+
+    // Re-render chart to adapt colors
+    if (elements.chartTypeSelect.value === "scatter") {
+      updateScatterPlot();
+    } else {
+      updateChartAndStats();
+    }
   }
 
   function initializeTheme() {
@@ -509,8 +1182,20 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function formatNumber(value) {
+    if (value === undefined || value === null || Number.isNaN(Number(value))) {
+      return "-";
+    }
     return Number(value).toLocaleString(undefined, {
       maximumFractionDigits: 2
     });
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   }
 });

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CSV Data Analyzer Dashboard v3 Fix</title>
+  <title>CSV Data Analyzer Dashboard</title>
   <link rel="stylesheet" href="assets/css/style.css" />
 
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
@@ -16,13 +16,19 @@
         <h1>CSV Data Analyzer Dashboard</h1>
         <p class="subtitle">Upload CSV, filter, sort, paginate, export, and visualize data</p>
       </div>
-      <button id="themeToggleBtn" class="theme-btn" type="button">🌙 Dark Mode</button>
+      <div class="header-actions">
+        <button id="profilerBtn" class="action-btn" type="button" title="View dataset quality and column profiles">📋 Column Profiler</button>
+        <button id="themeToggleBtn" class="theme-btn" type="button">🌙 Dark Mode</button>
+      </div>
     </div>
 
     <div id="dropZone" class="drop-zone">
       <p><strong>Drag & Drop CSV here</strong></p>
       <p>or</p>
-      <label for="csvFile" class="upload-btn">Choose CSV File</label>
+      <div class="drop-zone-actions">
+        <label for="csvFile" class="upload-btn">Choose CSV File</label>
+        <button id="loadSampleBtn" class="sample-btn" type="button">⚡ Load Sample Sales CSV</button>
+      </div>
       <input type="file" id="csvFile" accept=".csv" hidden />
       <small>Only .csv file supported</small>
     </div>
@@ -40,6 +46,7 @@
       <button id="exportBtn" type="button">Export Filtered CSV</button>
     </div>
 
+    <!-- Summary Overview -->
     <div class="summary-grid">
       <div class="card">
         <span class="label">Total Rows</span>
@@ -62,6 +69,12 @@
       </div>
     </div>
 
+    <!-- Expanded Statistics Grid -->
+    <div class="section-title-row">
+      <h3>📈 Statistical Metrics</h3>
+      <span class="section-hint">Calculated on the selected numeric column</span>
+    </div>
+
     <div class="stats-grid">
       <div class="stat-box">
         <span>Min</span>
@@ -72,30 +85,158 @@
         <strong id="maxValue">-</strong>
       </div>
       <div class="stat-box">
-        <span>Average</span>
+        <span>Average (Mean)</span>
         <strong id="avgValue">-</strong>
+      </div>
+      <div class="stat-box">
+        <span>Sum / Total</span>
+        <strong id="sumValue">-</strong>
+      </div>
+      <div class="stat-box">
+        <span>Median</span>
+        <strong id="medianValue">-</strong>
+      </div>
+      <div class="stat-box">
+        <span>Mode</span>
+        <strong id="modeValue">-</strong>
+      </div>
+      <div class="stat-box">
+        <span>Std Deviation (σ)</span>
+        <strong id="stdDevValue">-</strong>
+      </div>
+      <div class="stat-box">
+        <span>Distinct Values</span>
+        <strong id="distinctValue">-</strong>
+      </div>
+      <div class="stat-box">
+        <span>Missing / Empty</span>
+        <strong id="missingValue">-</strong>
       </div>
     </div>
 
-    <div class="chart-controls">
-      <select id="chartColumnSelect">
-        <option value="">Select column for chart</option>
-      </select>
+    <!-- Group By & Pivot Aggregations Section -->
+    <div class="analytics-card">
+      <div class="section-header">
+        <div>
+          <h3>📊 Group By & Pivot Aggregations</h3>
+          <p class="subtitle">Aggregate numerical values grouped by category</p>
+        </div>
+      </div>
 
-      <select id="chartTypeSelect">
-        <option value="auto">Auto Detect</option>
-        <option value="bar">Bar Chart</option>
-        <option value="pie">Pie Chart</option>
-        <option value="line">Line Chart</option>
-      </select>
+      <div class="agg-controls">
+        <div class="control-group">
+          <label for="groupByColSelect">Group By:</label>
+          <select id="groupByColSelect">
+            <option value="">Select Category Column</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label for="aggColSelect">Aggregate Column:</label>
+          <select id="aggColSelect">
+            <option value="">Select Numeric Column</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label for="aggFuncSelect">Calculation:</label>
+          <select id="aggFuncSelect">
+            <option value="sum">Sum</option>
+            <option value="avg">Average (Mean)</option>
+            <option value="count">Count of Rows</option>
+            <option value="min">Minimum</option>
+            <option value="max">Maximum</option>
+            <option value="median">Median</option>
+          </select>
+        </div>
+
+        <div class="control-actions">
+          <button id="plotAggBtn" type="button" class="btn-primary" disabled>📊 Plot to Chart</button>
+          <button id="exportAggBtn" type="button" disabled>Export Aggregation CSV</button>
+        </div>
+      </div>
+
+      <div class="agg-table-wrapper">
+        <table id="aggTable">
+          <thead>
+            <tr>
+              <th>Group Category</th>
+              <th>Record Count</th>
+              <th id="aggColHeader">Aggregated Value</th>
+              <th>% of Total</th>
+            </tr>
+          </thead>
+          <tbody id="aggTableBody">
+            <tr>
+              <td colspan="4" class="table-placeholder">Select a group column and numeric column above to aggregate.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
+    <!-- Chart Visualization Section -->
     <div class="chart-section">
+      <div class="chart-header">
+        <h3>📊 Data Visualizations</h3>
+      </div>
+
+      <div class="chart-controls">
+        <div class="standard-chart-controls" id="standardChartControls">
+          <select id="chartColumnSelect">
+            <option value="">Select column for chart</option>
+          </select>
+        </div>
+
+        <select id="chartTypeSelect">
+          <option value="auto">Auto Detect</option>
+          <option value="bar">Bar Chart</option>
+          <option value="line">Line Chart</option>
+          <option value="pie">Pie Chart</option>
+          <option value="doughnut">Doughnut Chart</option>
+          <option value="scatter">Scatter & Correlation Plot (X vs Y)</option>
+        </select>
+      </div>
+
+      <!-- Scatter & Correlation Controls (shown when scatter is selected) -->
+      <div id="scatterControls" class="scatter-controls" style="display: none;">
+        <div class="scatter-selectors">
+          <div class="control-group">
+            <label for="scatterXSelect">X-Axis (Numeric):</label>
+            <select id="scatterXSelect">
+              <option value="">Select X Column</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label for="scatterYSelect">Y-Axis (Numeric):</label>
+            <select id="scatterYSelect">
+              <option value="">Select Y Column</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Correlation Results Box -->
+        <div id="correlationBox" class="correlation-box" style="display: none;">
+          <div class="correlation-metric">
+            <span class="corr-label">Pearson Correlation (r):</span>
+            <strong id="corrValue">-</strong>
+          </div>
+          <div class="correlation-status">
+            <span id="corrBadge" class="corr-badge">-</span>
+          </div>
+          <div class="correlation-regression">
+            <span class="corr-label">Regression Line:</span>
+            <code id="regressionEquation">-</code>
+          </div>
+        </div>
+      </div>
+
       <div class="chart-wrapper">
         <canvas id="myChart"></canvas>
       </div>
     </div>
 
+    <!-- Table Section -->
     <div class="table-section">
       <table id="csvTable">
         <thead></thead>
@@ -110,6 +251,68 @@
       <button id="nextPageBtn" type="button">Next</button>
     </div>
   </div>
+
+  <!-- Data Quality & Column Profiler Modal -->
+  <dialog id="profilerModal" class="profiler-modal">
+    <div class="modal-dialog-content">
+      <div class="modal-header">
+        <div>
+          <h2>Data Quality & Column Profiler</h2>
+          <p class="subtitle">Complete health audit and column specifications for your dataset</p>
+        </div>
+        <button id="closeProfilerModal" class="modal-close-btn" type="button" aria-label="Close modal">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="quality-summary-cards">
+          <div class="q-card">
+            <span>Overall Completeness</span>
+            <strong id="overallCompleteness">0%</strong>
+          </div>
+          <div class="q-card">
+            <span>Total Columns</span>
+            <strong id="profilerTotalCols">0</strong>
+          </div>
+          <div class="q-card">
+            <span>Total Rows</span>
+            <strong id="profilerTotalRows">0</strong>
+          </div>
+          <div class="q-card">
+            <span>Total Cells</span>
+            <strong id="profilerTotalCells">0</strong>
+          </div>
+          <div class="q-card">
+            <span>Missing Cells</span>
+            <strong id="profilerMissingCells">0</strong>
+          </div>
+        </div>
+
+        <div class="profiler-table-container">
+          <table id="profilerTable">
+            <thead>
+              <tr>
+                <th>Column Name</th>
+                <th>Inferred Type</th>
+                <th>Completeness</th>
+                <th>Missing Count</th>
+                <th>Distinct Values</th>
+                <th>Distribution / Value Range</th>
+              </tr>
+            </thead>
+            <tbody id="profilerTableBody">
+              <tr>
+                <td colspan="6" class="table-placeholder">No dataset loaded to profile.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="closeProfilerBtn" type="button" class="btn-primary">Close</button>
+      </div>
+    </div>
+  </dialog>
 
   <script src="assets/js/script.js"></script>
 </body>
