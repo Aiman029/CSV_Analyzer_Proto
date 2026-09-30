@@ -178,7 +178,18 @@
     <!-- Chart Visualization Section -->
     <div class="chart-section">
       <div class="chart-header">
-        <h3>📊 Data Visualizations</h3>
+        <div>
+          <h3>📊 Data Visualizations</h3>
+          <p class="subtitle">Interactive charting with multiple views, color themes, and high-res export</p>
+        </div>
+        <div class="chart-header-actions">
+          <button id="downloadChartPngBtn" class="action-btn" type="button" title="Export as PNG Image">
+            📷 Export PNG
+          </button>
+          <button id="downloadChartJpegBtn" class="action-btn" type="button" title="Export as JPEG Image">
+            🖼️ Export JPEG
+          </button>
+        </div>
       </div>
 
       <div class="chart-controls">
@@ -190,12 +201,40 @@
 
         <select id="chartTypeSelect">
           <option value="auto">Auto Detect</option>
-          <option value="bar">Bar Chart</option>
+          <option value="bar">Bar Chart (Vertical)</option>
+          <option value="horizontalBar">Horizontal Bar Chart</option>
           <option value="line">Line Chart</option>
           <option value="pie">Pie Chart</option>
           <option value="doughnut">Doughnut Chart</option>
+          <option value="histogram">Histogram (Frequency Distribution)</option>
+          <option value="polarArea">Polar Area Chart</option>
+          <option value="radar">Radar Chart</option>
           <option value="scatter">Scatter & Correlation Plot (X vs Y)</option>
         </select>
+
+        <select id="chartThemeSelect" title="Select Chart Color Theme">
+          <option value="vibrant">🎨 Vibrant Theme</option>
+          <option value="neon">⚡ Neon Theme</option>
+          <option value="pastel">🌸 Pastel Theme</option>
+          <option value="emerald">🌲 Emerald Theme</option>
+          <option value="sunset">🌅 Sunset Theme</option>
+        </select>
+      </div>
+
+      <!-- Histogram Controls (shown when histogram is selected) -->
+      <div id="histogramControls" class="histogram-controls" style="display: none;">
+        <div class="control-group-inline">
+          <label for="histogramBinsSelect">Histogram Bins:</label>
+          <select id="histogramBinsSelect">
+            <option value="auto">Auto Bins (Sturges Rule)</option>
+            <option value="5">5 Bins</option>
+            <option value="8">8 Bins</option>
+            <option value="10">10 Bins</option>
+            <option value="15">15 Bins</option>
+            <option value="20">20 Bins</option>
+          </select>
+          <span class="section-hint" id="histogramHint">Frequency distribution for selected numeric column</span>
+        </div>
       </div>
 
       <!-- Scatter & Correlation Controls (shown when scatter is selected) -->

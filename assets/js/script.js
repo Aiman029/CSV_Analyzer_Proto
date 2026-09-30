@@ -9,7 +9,8 @@ document.addEventListener("DOMContentLoaded", () => {
     rowsPerPage: 5,
     currentSortColumn: "",
     currentSortDirection: "asc",
-    aggregationResults: null
+    aggregationResults: null,
+    currentChartTheme: "vibrant"
   };
 
   const elements = {
@@ -50,10 +51,16 @@ document.addEventListener("DOMContentLoaded", () => {
     aggColHeader: document.getElementById("aggColHeader"),
     aggTableBody: document.getElementById("aggTableBody"),
 
-    // Chart & Scatter
+    // Chart, Scatter, Themes & Histogram
     standardChartControls: document.getElementById("standardChartControls"),
     chartColumnSelect: document.getElementById("chartColumnSelect"),
     chartTypeSelect: document.getElementById("chartTypeSelect"),
+    chartThemeSelect: document.getElementById("chartThemeSelect"),
+    histogramControls: document.getElementById("histogramControls"),
+    histogramBinsSelect: document.getElementById("histogramBinsSelect"),
+    histogramHint: document.getElementById("histogramHint"),
+    downloadChartPngBtn: document.getElementById("downloadChartPngBtn"),
+    downloadChartJpegBtn: document.getElementById("downloadChartJpegBtn"),
     scatterControls: document.getElementById("scatterControls"),
     scatterXSelect: document.getElementById("scatterXSelect"),
     scatterYSelect: document.getElementById("scatterYSelect"),
@@ -109,6 +116,17 @@ document.addEventListener("DOMContentLoaded", () => {
     // Chart controls
     elements.chartColumnSelect.addEventListener("change", updateChartAndStats);
     elements.chartTypeSelect.addEventListener("change", handleChartTypeChange);
+    elements.chartThemeSelect.addEventListener("change", (e) => {
+      state.currentChartTheme = e.target.value;
+      if (elements.chartTypeSelect.value === "scatter") {
+        updateScatterPlot();
+      } else {
+        updateChartAndStats();
+      }
+    });
+    elements.histogramBinsSelect.addEventListener("change", updateChartAndStats);
+    elements.downloadChartPngBtn.addEventListener("click", () => exportChartImage("png"));
+    elements.downloadChartJpegBtn.addEventListener("click", () => exportChartImage("jpeg"));
     elements.scatterXSelect.addEventListener("change", updateScatterPlot);
     elements.scatterYSelect.addEventListener("change", updateScatterPlot);
 
@@ -562,30 +580,73 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /* ========================================================
-     FEATURE: CHARTING & SCATTER PLOT (X vs Y) WITH CORRELATION
+     FEATURE: CHART PALETTES & THEMES
+     ======================================================== */
+  const chartPalettes = {
+    vibrant: {
+      name: "Vibrant",
+      colors: ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316", "#14b8a6"],
+      primary: "#3b82f6",
+      primaryBg: "rgba(59, 130, 246, 0.75)"
+    },
+    neon: {
+      name: "Neon Cyber",
+      colors: ["#00f0ff", "#ff007f", "#7928ca", "#00ff66", "#ffea00", "#ff0033", "#00bfff", "#ff00aa"],
+      primary: "#00f0ff",
+      primaryBg: "rgba(0, 240, 255, 0.75)"
+    },
+    pastel: {
+      name: "Pastel Dream",
+      colors: ["#93c5fd", "#86efac", "#fde047", "#d8b4fe", "#f9a8d4", "#67e8f9", "#fdba74", "#99f6e4"],
+      primary: "#93c5fd",
+      primaryBg: "rgba(147, 197, 253, 0.75)"
+    },
+    emerald: {
+      name: "Emerald Forest",
+      colors: ["#059669", "#10b981", "#34d399", "#6ee7b7", "#0d9488", "#14b8a6", "#2dd4bf", "#5eead4"],
+      primary: "#10b981",
+      primaryBg: "rgba(16, 185, 129, 0.75)"
+    },
+    sunset: {
+      name: "Sunset Glow",
+      colors: ["#4c1d95", "#7c3aed", "#c026d3", "#db2777", "#e11d48", "#f97316", "#f59e0b", "#fbbf24"],
+      primary: "#f97316",
+      primaryBg: "rgba(249, 115, 22, 0.75)"
+    }
+  };
+
+  /* ========================================================
+     FEATURE: CHARTING & VISUALIZATIONS
      ======================================================== */
   function handleChartTypeChange() {
     const selectedType = elements.chartTypeSelect.value;
     if (selectedType === "scatter") {
       elements.standardChartControls.style.display = "none";
       elements.scatterControls.style.display = "block";
+      elements.histogramControls.style.display = "none";
       updateScatterPlot();
+    } else if (selectedType === "histogram") {
+      elements.standardChartControls.style.display = "block";
+      elements.scatterControls.style.display = "none";
+      elements.histogramControls.style.display = "block";
+      updateChartAndStats();
     } else {
       elements.standardChartControls.style.display = "block";
       elements.scatterControls.style.display = "none";
+      elements.histogramControls.style.display = "none";
       updateChartAndStats();
     }
   }
 
   function updateChartAndStats() {
-    if (elements.chartTypeSelect.value === "scatter") {
+    const selectedChartType = elements.chartTypeSelect.value;
+    if (selectedChartType === "scatter") {
       updateScatterPlot();
       return;
     }
 
     resetStats();
     const selectedColumn = elements.chartColumnSelect.value;
-    const selectedChartType = elements.chartTypeSelect.value;
 
     if (!selectedColumn || !state.filteredData.length) {
       destroyChart();
@@ -595,15 +656,25 @@ document.addEventListener("DOMContentLoaded", () => {
     if (state.numericColumns.includes(selectedColumn)) {
       elements.selectedNumericColumn.textContent = selectedColumn;
       updateNumericStats(selectedColumn);
-      renderNumericChart(selectedColumn, detectChartType(selectedColumn, selectedChartType));
+
+      if (selectedChartType === "histogram") {
+        renderHistogramChart(selectedColumn);
+      } else {
+        renderNumericChart(selectedColumn, detectChartType(selectedColumn, selectedChartType));
+      }
     } else {
-      renderCategoryChart(selectedColumn, detectChartType(selectedColumn, selectedChartType));
+      if (selectedChartType === "histogram") {
+        // If categorical column is selected with histogram, plot count distribution
+        renderCategoryChart(selectedColumn, "bar");
+      } else {
+        renderCategoryChart(selectedColumn, detectChartType(selectedColumn, selectedChartType));
+      }
     }
   }
 
   function detectChartType(column, selectedChartType) {
     if (selectedChartType !== "auto") {
-      if (state.numericColumns.includes(column) && (selectedChartType === "pie" || selectedChartType === "doughnut")) {
+      if (state.numericColumns.includes(column) && (selectedChartType === "pie" || selectedChartType === "doughnut" || selectedChartType === "polarArea")) {
         return "bar";
       }
       return selectedChartType;
@@ -629,7 +700,7 @@ document.addEventListener("DOMContentLoaded", () => {
       .filter((value) => !Number.isNaN(value));
 
     const labels = values.map((_, index) => `Row ${index + 1}`);
-    renderStandardChart(labels, values, `${column} Distribution`, chartType);
+    renderStandardChart(labels, values, `${column} Distribution`, chartType, { column, isNumericSeries: true });
   }
 
   function renderCategoryChart(column, chartType) {
@@ -643,7 +714,63 @@ document.addEventListener("DOMContentLoaded", () => {
       Object.keys(counts),
       Object.values(counts),
       `Count by ${column}`,
-      chartType
+      chartType,
+      { column, isCategorySeries: true }
+    );
+  }
+
+  function renderHistogramChart(column) {
+    const rawValues = state.filteredData
+      .map((row) => Number(row[column]))
+      .filter((val) => !Number.isNaN(val) && String(val).trim() !== "");
+
+    if (!rawValues.length) {
+      destroyChart();
+      return;
+    }
+
+    const min = Math.min(...rawValues);
+    const max = Math.max(...rawValues);
+
+    let binCount = 10;
+    const selectedBins = elements.histogramBinsSelect.value;
+    if (selectedBins === "auto") {
+      // Sturges' Rule: k = ceil(log2(n) + 1)
+      binCount = Math.min(15, Math.max(5, Math.ceil(Math.log2(rawValues.length) + 1)));
+    } else {
+      binCount = parseInt(selectedBins, 10) || 10;
+    }
+
+    if (min === max) {
+      const labels = [`[${formatNumber(min)}]`];
+      const data = [rawValues.length];
+      renderStandardChart(labels, data, `Histogram of ${column}`, "bar", { isHistogram: true, column });
+      return;
+    }
+
+    const binWidth = (max - min) / binCount;
+    const bins = Array.from({ length: binCount }, () => 0);
+    const binLabels = [];
+
+    for (let i = 0; i < binCount; i++) {
+      const start = min + i * binWidth;
+      const end = i === binCount - 1 ? max : min + (i + 1) * binWidth;
+      binLabels.push(`${formatNumber(start)} - ${formatNumber(end)}`);
+    }
+
+    rawValues.forEach((val) => {
+      let index = Math.floor((val - min) / binWidth);
+      if (index >= binCount) index = binCount - 1;
+      if (index < 0) index = 0;
+      bins[index]++;
+    });
+
+    renderStandardChart(
+      binLabels,
+      bins,
+      `Histogram (Frequency Distribution) of ${column}`,
+      "bar",
+      { isHistogram: true, column }
     );
   }
 
@@ -742,6 +869,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const isDark = document.body.classList.contains("dark");
     const textColor = isDark ? "#cbd5e1" : "#475569";
     const gridColor = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)";
+    const theme = chartPalettes[state.currentChartTheme] || chartPalettes.vibrant;
 
     state.chartInstance = new Chart(ctx, {
       type: "scatter",
@@ -750,9 +878,9 @@ document.addEventListener("DOMContentLoaded", () => {
           {
             label: `${yLabel} vs ${xLabel}`,
             data: scatterPoints,
-            backgroundColor: "rgba(37, 99, 235, 0.7)",
-            borderColor: "rgba(37, 99, 235, 1)",
-            borderWidth: 1,
+            backgroundColor: theme.primaryBg,
+            borderColor: theme.primary,
+            borderWidth: 1.5,
             pointRadius: 6,
             pointHoverRadius: 8
           },
@@ -814,46 +942,68 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  function renderStandardChart(labels, data, label, type) {
+  function renderStandardChart(labels, data, label, type, options = {}) {
     destroyChart();
     const ctx = elements.chartCanvas.getContext("2d");
     const isDark = document.body.classList.contains("dark");
     const textColor = isDark ? "#cbd5e1" : "#475569";
     const gridColor = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)";
+    const theme = chartPalettes[state.currentChartTheme] || chartPalettes.vibrant;
 
-    const palette = [
-      "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6",
-      "#ec4899", "#06b6d4", "#f97316", "#14b8a6"
-    ];
+    const isHorizontal = type === "horizontalBar";
+    const actualType = isHorizontal ? "bar" : type;
+    const isRadial = actualType === "pie" || actualType === "doughnut" || actualType === "polarArea";
+    const isRadar = actualType === "radar";
 
-    const isPieLike = type === "pie" || type === "doughnut";
+    // Palette background and border assignment
+    let backgroundColors;
+    let borderColors;
 
-    state.chartInstance = new Chart(ctx, {
-      type: type,
+    if (isRadial) {
+      backgroundColors = labels.map((_, i) => theme.colors[i % theme.colors.length]);
+      borderColors = isDark ? "#1e293b" : "#ffffff";
+    } else if (isRadar) {
+      backgroundColors = theme.primaryBg;
+      borderColors = theme.primary;
+    } else if (actualType === "bar") {
+      if (options.isHistogram) {
+        backgroundColors = theme.primaryBg;
+        borderColors = theme.primary;
+      } else {
+        backgroundColors = labels.map((_, i) => theme.colors[i % theme.colors.length]);
+        borderColors = labels.map((_, i) => theme.colors[i % theme.colors.length]);
+      }
+    } else {
+      // line chart
+      backgroundColors = theme.primaryBg;
+      borderColors = theme.primary;
+    }
+
+    const chartConfig = {
+      type: actualType,
       data: {
         labels: labels,
         datasets: [
           {
             label: label,
             data: data,
-            backgroundColor: isPieLike
-              ? labels.map((_, i) => palette[i % palette.length])
-              : "rgba(59, 130, 246, 0.7)",
-            borderColor: isPieLike
-              ? "#ffffff"
-              : "#3b82f6",
-            borderWidth: 2,
-            fill: type === "line" ? false : true,
-            tension: 0.3
+            backgroundColor: backgroundColors,
+            borderColor: borderColors,
+            borderWidth: actualType === "line" || isRadar ? 2.5 : 1.5,
+            fill: actualType === "line" ? false : isRadar ? true : true,
+            tension: 0.35,
+            barPercentage: options.isHistogram ? 0.98 : 0.85,
+            categoryPercentage: options.isHistogram ? 0.98 : 0.85
           }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        indexAxis: isHorizontal ? "y" : "x",
         plugins: {
           legend: {
-            display: isPieLike,
+            display: isRadial || isRadar,
             labels: { color: textColor }
           },
           title: {
@@ -861,23 +1011,89 @@ document.addEventListener("DOMContentLoaded", () => {
             text: label,
             color: textColor,
             font: { size: 15, weight: "bold" }
-          }
-        },
-        scales: isPieLike
-          ? {}
-          : {
-              x: {
-                ticks: { color: textColor },
-                grid: { color: gridColor }
-              },
-              y: {
-                beginAtZero: true,
-                ticks: { color: textColor },
-                grid: { color: gridColor }
+          },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const val = ctx.raw !== undefined ? formatNumber(ctx.raw) : "";
+                if (options.isHistogram) {
+                  const total = data.reduce((a, b) => a + b, 0);
+                  const pct = total > 0 ? ((ctx.raw / total) * 100).toFixed(1) : 0;
+                  return `Count: ${val} rows (${pct}%)`;
+                }
+                return `${ctx.dataset.label}: ${val}`;
               }
             }
+          }
+        }
       }
-    });
+    };
+
+    // Configure scales depending on chart type
+    if (isRadial) {
+      chartConfig.options.scales = actualType === "polarArea" ? {
+        r: {
+          grid: { color: gridColor },
+          ticks: { color: textColor, backdropColor: "transparent" }
+        }
+      } : {};
+    } else if (isRadar) {
+      chartConfig.options.scales = {
+        r: {
+          angleLines: { color: gridColor },
+          grid: { color: gridColor },
+          ticks: { color: textColor, backdropColor: "transparent" }
+        }
+      };
+    } else {
+      chartConfig.options.scales = {
+        x: {
+          ticks: { color: textColor },
+          grid: { color: gridColor },
+          beginAtZero: isHorizontal
+        },
+        y: {
+          ticks: { color: textColor },
+          grid: { color: gridColor },
+          beginAtZero: !isHorizontal
+        }
+      };
+    }
+
+    state.chartInstance = new Chart(ctx, chartConfig);
+  }
+
+  function exportChartImage(format = "png") {
+    if (!state.chartInstance || !elements.chartCanvas) {
+      alert("No active chart to export.");
+      return;
+    }
+
+    const canvas = elements.chartCanvas;
+    const exportCanvas = document.createElement("canvas");
+    exportCanvas.width = canvas.width;
+    exportCanvas.height = canvas.height;
+    const exportCtx = exportCanvas.getContext("2d");
+
+    const isDark = document.body.classList.contains("dark");
+    exportCtx.fillStyle = isDark ? "#1e293b" : "#ffffff";
+    exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+    exportCtx.drawImage(canvas, 0, 0);
+
+    const mime = format === "jpeg" ? "image/jpeg" : "image/png";
+    const ext = format === "jpeg" ? "jpg" : "png";
+    const dataURL = exportCanvas.toDataURL(mime, 0.95);
+
+    const colName = (elements.chartColumnSelect.value || elements.chartTypeSelect.value || "chart")
+      .replace(/[^a-zA-Z0-9_-]/g, "_");
+    const fileName = `${colName}_visualization_${Date.now()}.${ext}`;
+
+    const link = document.createElement("a");
+    link.download = fileName;
+    link.href = dataURL;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 
   function destroyChart() {
